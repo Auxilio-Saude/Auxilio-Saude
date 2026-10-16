@@ -1,5 +1,5 @@
 // Auxílio-Saúde: guarda o app para abrir sem internet. Sempre tenta a versão nova primeiro.
-const VERSAO = "auxilio-v18";
+const VERSAO = "auxilio-v19";
 const ARQUIVOS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(VERSAO).then(c => c.addAll(ARQUIVOS))); self.skipWaiting(); });
 self.addEventListener("activate", e => {

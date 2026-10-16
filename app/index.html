@@ -712,6 +712,9 @@ async function lerPasta(log){
     for(let k=0;k<ps.length;k++){
       let r;try{r=await ps[k];}catch(e){log("⚠ "+e.message);continue;}
       const {f,l,como}=r;
+      if(l._plano){const r=aplicarPlano(l._plano,mensalidadesPlano(l._plano));D.arquivosIgnorados.push(f.cam);
+        if(cfg.organizar&&!f.cam.startsWith(cfg.pastaApp+"/Extratos do plano/")){try{const fim=await NV.mover(f.cam,cfg.pastaApp+"/Extratos do plano/"+limparNome("Extrato "+operadoraPlano(l._plano)+" "+(l._plano.titular||""))+(f.cam.toLowerCase().match(/\.[a-z0-9]{2,5}$/)||[".pdf"])[0]);D.arquivosIgnorados.push(fim);}catch(e){}}
+        log("🏥 "+f.nome+" é extrato do plano de saúde → "+r.texto);continue;}
       if(l._ficha){const n=aplicarFicha(mesesFicha(l._ficha));D.arquivosIgnorados.push(f.cam);
         if(cfg.organizar&&!f.cam.startsWith(cfg.pastaApp+"/Fichas financeiras/")){try{const anos=[...new Set(mesesFicha(l._ficha).map(x=>x.ano))].join("-");const fim=await NV.mover(f.cam,cfg.pastaApp+"/Fichas financeiras/Ficha financeira "+anos+(f.cam.toLowerCase().match(/\.[a-z0-9]{2,5}$/)||[".pdf"])[0]);D.arquivosIgnorados.push(fim);}catch(e){}}log("📄 "+f.nome+" é ficha financeira → "+n+" mês(es) de auxílio recebido atualizado(s)");continue;}
       const dups=possiveisDuplicados(l);
@@ -856,7 +859,7 @@ Regras:
 - 'medicamento' = true para remédios, vacinas (inclua a taxa de aplicação de vacina como true), fórmulas manipuladas, colírios, pomadas e sprays medicinais. false para cosméticos/dermocosméticos (ex.: Bepantol Derma, hidratantes, protetor), suplementos e vitaminas vendidos como suplemento (ex.: ômega 3, lactase, vitamina D/C suplemento), preservativos, testes de gravidez, higiene, curativos, seringas, acessórios e frete.
 - Consulta, exame, psicólogo e plano de saúde normalmente não têm itens; deixe 'itens' vazio.
 - Valores em número com ponto decimal (ex.: 1234.56). Se algo não estiver visível, deixe vazio ou 0.
-Se o documento NÃO for comprovante de despesa, mas uma FICHA FINANCEIRA, contracheque ou demonstrativo de pagamento do servidor, responda SOMENTE com: {"tipo_documento": "Ficha financeira", "auxilio_saude": [{"ano": 2025, "mes": 1, "valor": 0.00, "diferenca": 0.00}]} com um item por mês que tenha valor, usando apenas a linha de AUXÍLIO-SAÚDE (valor) e a linha de DIFERENÇA DE AUXÍLIO-SAÚDE (diferenca) daquele mês. Confira o mês de cada valor pela coluna do cabeçalho (JAN a DEZ) e o ano pelo título da tabela; ignore a coluna de total, o 13º e as demais rubricas.`;
+Se o documento NÃO for comprovante de despesa, mas uma FICHA FINANCEIRA, contracheque ou demonstrativo de pagamento do servidor, responda SOMENTE com: {"tipo_documento": "Ficha financeira", "auxilio_saude": [{"ano": 2025, "mes": 1, "valor": 0.00, "diferenca": 0.00}]} com um item por mês que tenha valor, usando apenas a linha de AUXÍLIO-SAÚDE (valor) e a linha de DIFERENÇA DE AUXÍLIO-SAÚDE (diferenca) daquele mês. Confira o mês de cada valor pela coluna do cabeçalho (JAN a DEZ) e o ano pelo título da tabela; ignore a coluna de total, o 13º e as demais rubricas. Se o documento for um EXTRATO DE PAGAMENTOS DE PLANO DE SAÚDE emitido pela operadora ou pela administradora (às vezes com o título "Ficha Financeira", mas com uma linha por mensalidade: beneficiário, vencimento, data de pagamento/recebimento, valor e competência), responda SOMENTE com: {"tipo_documento": "Extrato do plano de saude", "operadora": "", "administradora": "", "titular": "", "cpf_titular": "", "mensalidades": [{"competencia": "2025-03", "pagamento": "2025-04-01", "vencimento": "2025-03-30", "valor_pago": 0.00, "beneficiario": ""}]} com um item por linha de TODAS as páginas e anos. valor_pago = coluna "Vlr. Recebido" (ou valor pago); pagamento = coluna "Recebimento" (data em que foi pago), no formato AAAA-MM-DD; competencia no formato AAAA-MM. Ignore linhas sem pagamento e os totais. Não confunda com a ficha financeira do servidor (contracheque com rubricas como vencimento, descontos e AUXÍLIO-SAÚDE).`;
 function paraB64(blob){return new Promise((ok,err)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]);r.onerror=()=>err(r.error);r.readAsDataURL(blob);});}
 function extrairJson(t){let s=String(t||"").trim();if(s.startsWith("```")){s=s.slice(s.indexOf("\n")+1);s=s.slice(0,s.lastIndexOf("```"));}
   const i=s.indexOf("{"),j=s.lastIndexOf("}");if(i<0||j<=i)throw new Error("A IA não devolveu JSON.");return JSON.parse(s.slice(i,j+1));}
@@ -896,6 +899,7 @@ async function iaLer(arquivo,nome,rapido){
   throw new Error(ultimo||"A IA não respondeu.");
 }
 function aplicarIA(j,l){
+  if(Array.isArray(j.mensalidades)&&!Array.isArray(j.auxilio_saude)){l._plano=j;return;}
   if(/ficha/i.test(j.tipo_documento||"")&&Array.isArray(j.auxilio_saude)){l._ficha=j;return;}
   let d=dataIso(j.data),dataRuim="";if(d&&!dataPlausivel(d)){dataRuim=d;d="";}if(d)l.data=d;
   if((j.estabelecimento||"").trim())l.estabelecimento=j.estabelecimento.trim();
@@ -1234,7 +1238,7 @@ async function rodarReleitura(lista){
     try{
       const j=await iaLer(b,nome,!!cfg.rapido);
       reTentou=false;
-      if(/ficha/i.test(j.tipo_documento||"")&&Array.isArray(j.auxilio_saude)){lidos++;continue;}
+      if(ehPlanoJ(j)||/ficha/i.test(j.tipo_documento||"")&&Array.isArray(j.auxilio_saude)){lidos++;continue;}
       const chave=x=>[x.data,x.valor,x.estabelecimento,x.categoria,x.cpf].join("|");
       const antes=chave(l),obsA=l.obs||"";
       aplicarIA(j,l);
@@ -1282,7 +1286,8 @@ async function procurarNaoLancadas(){
     try{
       const blob=await guardarBaixado(f.cam,await NV.baixar(f.it));
       const j=await iaLer(blob,f.nome,!!cfg.rapido);verif++;reTentou=false;
-      if(/ficha/i.test(j.tipo_documento||"")&&Array.isArray(j.auxilio_saude)){fichas++;marcarConferido(f.cam);st.log("   ficha financeira (ignorada)");}
+      if(ehPlanoJ(j)){const r=aplicarPlano(j,mensalidadesPlano(j));fichas++;marcarConferido(f.cam);novas.push({extrato:true,texto:"Extrato do plano "+operadoraPlano(j)+": "+r.novos+" lançada(s), "+r.corr+" corrigida(s)"});st.log("   🏥 extrato do plano → "+r.texto);}
+      else if(/ficha/i.test(j.tipo_documento||"")&&Array.isArray(j.auxilio_saude)){fichas++;marcarConferido(f.cam);st.log("   ficha financeira (ignorada)");}
       else{
         const l=novoLanc("GASTO");aplicarIA(j,l);const p=pessoaPorCpf(l.cpf);if(p)l.pessoaId=p.id;
         const sem=semComprovantePara(l),dups=possiveisDuplicados(l);
@@ -1309,7 +1314,7 @@ async function procurarNaoLancadas(){
   if(cfg.organizar&&org.size){try{await organizar(org,st.log);}catch(e){}}
   await persistir();render();
   st.log("\n"+verif+" arquivo(s) conferido(s) pela IA."+(ja?"\n• "+ja+" já estavam lançadas":"")+(ligadas?"\n• "+ligadas+" comprovaram gastos que estavam sem nota":"")+(fichas?"\n• "+fichas+" ficha(s) financeira(s) ignoradas":"")
-    +(novas.length?"\n\n"+novas.length+" NOTA(S) QUE NÃO ESTAVAM LANÇADAS (agora lançadas, marcadas \"Conferir\"):\n"+novas.map(l=>" • "+textoLanc(l)).join("\n"):"\n\nNenhuma nota nova encontrada.")
+    +(novas.length?"\n\n"+novas.length+" NOTA(S) QUE NÃO ESTAVAM LANÇADAS (agora lançadas, marcadas \"Conferir\"):\n"+novas.map(l=>" • "+(l.extrato?l.texto:textoLanc(l))).join("\n"):"\n\nNenhuma nota nova encontrada.")
     +(fal?"\n\n"+fal+" arquivo(s) não puderam ser lidos.":"")+(parou?"\n\nParou antes do fim: "+parou+"\nToque de novo depois para continuar de onde parou.":""));
   st.acabar();
 }
@@ -1523,6 +1528,54 @@ function aplicarFicha(ms){
   }
   return n;
 }
+// ---------------------------------------------------------------- extrato de pagamentos do plano de saúde -> gasto de cada mês
+const ehPlanoJ=j=>j&&Array.isArray(j.mensalidades)&&!Array.isArray(j.auxilio_saude);
+function compPlano(s){s=String(s||"").trim();let m=s.match(/(\d{4})-(\d{1,2})/);if(m)return m[1]+"-"+m[2].padStart(2,"0");m=s.match(/(?:\d{1,2}\/)?(\d{1,2})\/(\d{4})/);return m?m[2]+"-"+m[1].padStart(2,"0"):"";}
+function mensalidadesPlano(j){
+  const n=v=>typeof v==="number"?Math.round(v*100)/100:parseValor(v);const vis=new Set();
+  return (j.mensalidades||[]).map(o=>{let c=compPlano(o.competencia);const pg=dataIso(o.pagamento||"");let v=n(o.valor_pago)||n(o.valor)||0;if(!c&&pg)c=pg.slice(0,7);
+      return {comp:c,pg,valor:v,benef:String(o.beneficiario||"").trim(),data:dataPlausivel(pg)?pg:c+"-01"};})
+    .filter(m=>m.comp&&m.valor>0&&!vis.has(m.comp+"|"+m.pg+"|"+m.valor)&&vis.add(m.comp+"|"+m.pg+"|"+m.valor)).sort((a,b)=>a.comp.localeCompare(b.comp));
+}
+const operadoraPlano=j=>String(j.operadora||"").trim()||String(j.administradora||"").trim()||"Plano de saúde";
+const ehGastoPlano=l=>ehGasto(l)&&normalizarCategoria(l.categoria)==="Plano de saúde";
+function aplicarPlano(j,ms){
+  const r={novos:0,corr:0,iguais:0,semData:0};const cpf=soDig(j.cpf_titular),p=pessoaPorCpf(cpf),pid=p?p.id:"";
+  const op=operadoraPlano(j),adm=String(j.administradora||"").trim(),chave=cpf||pid||norm(String(j.titular||"")+op);const usados=new Set();
+  r.pessoa=p?p.nome.replace(" (titular)",""):String(j.titular||"").trim();
+  for(const m of ms){
+    const id="pl-"+chave+"-"+m.comp;let alvo=D.lancamentos.find(l=>l.id===id);
+    if(!alvo){const mesPg=m.data.slice(0,7);let melhor=null;
+      for(const l of D.lancamentos){
+        if(!ehGastoPlano(l)||usados.has(l.id)||l.id.startsWith("pl-"))continue;const am=(l.data||"").slice(0,7);if(am!==mesPg&&am!==m.comp)continue;
+        const mesma=pid?l.pessoaId===pid:!!cpf&&soDig(l.cpf)===cpf;
+        const e=norm(l.estabelecimento);const semP=!l.pessoaId&&!soDig(l.cpf)&&(!e||e.includes(norm(op))||(adm&&e.includes(norm(adm))));
+        if(!mesma&&!semP)continue;
+        if(!melhor||Math.abs(l.valor-m.valor)<Math.abs(melhor.valor-m.valor)||(am===mesPg&&(melhor.data||"").slice(0,7)!==mesPg))melhor=l;}
+      alvo=melhor;}
+    const novo=!alvo;if(novo){alvo=novoLanc("GASTO");alvo.id=id;D.lancamentos.push(alvo);}
+    usados.add(alvo.id);
+    if(!novo&&Math.abs(alvo.valor-m.valor)<.005&&alvo.data===m.data&&alvo.comprovado){r.iguais++;continue;}
+    const cc=m.comp.slice(5,7)+"/"+m.comp.slice(0,4);
+    alvo.categoria="Plano de saúde";if(novo||!alvo.estabelecimento)alvo.estabelecimento=op;alvo.descricao="Mensalidade do plano — competência "+cc;
+    alvo.data=m.data;alvo.valor=m.valor;if(pid)alvo.pessoaId=pid;if(cpf)alvo.cpf=cpf;if(!alvo.consumidor)alvo.consumidor=m.benef||String(j.titular||"");
+    alvo.comprovado=true;alvo.obs="Extrato do plano"+(adm?" ("+adm+")":"")+": competência "+cc+(dataPlausivel(m.pg)?", pago em "+dataBr(m.pg):"");alvo.alteradoEm=agora();
+    novo?r.novos++:r.corr++;
+  }
+  r.semData=D.lancamentos.filter(l=>ehGastoPlano(l)&&!l.data&&(pid?l.pessoaId===pid:(!cpf||soDig(l.cpf)===cpf||!l.pessoaId))).length;
+  r.texto=r.novos+" mensalidade(s) lançada(s), "+r.corr+" corrigida(s)"+(r.iguais?", "+r.iguais+" já estavam certas":"")+"."
+    +(r.semData?"\n\nAtenção: há "+r.semData+" gasto(s) de plano de saúde SEM DATA"+(r.pessoa?" de "+r.pessoa:"")+". Se eram o total do plano lançado de uma vez, exclua-os para não contar em dobro.":"");
+  return r;
+}
+function perguntarPlano(j){
+  const ms=mensalidadesPlano(j);if(!ms.length){alert("Não encontrei mensalidades pagas neste extrato.");return;}
+  const p=pessoaPorCpf(j.cpf_titular),anos={};for(const m of ms){const a=m.comp.slice(0,4);anos[a]=anos[a]||{n:0,v:0};anos[a].n++;anos[a].v+=m.valor;}
+  const t=ms.reduce((a,m)=>a+m.valor,0);window.__plano=[j,ms];
+  dialogo("Extrato do plano: lançar as mensalidades?",`<p style="margin-top:0"><b>${esc(operadoraPlano(j))}</b>${j.administradora?" ("+esc(j.administradora)+")":""}<br>Titular: ${p?esc(p.nome):esc(j.titular||"não identificado")+(p?"":" <span class=\"muted\">— não cadastrado</span>")}</p>`
+    +Object.keys(anos).sort().map(a=>`<div class="soma"><span>${a}: ${anos[a].n} mensalidade(s)</span><b>${moeda(anos[a].v)}</b></div>`).join("")+`<div class="soma"><b>Total</b><b>${moeda(t)}</b></div>`
+    +`<p class="muted">Cada mensalidade entra como gasto "Plano de saúde" na data do pagamento. Se já houver o lançamento do plano daquele mês (da mesma pessoa), ele é corrigido com o valor do extrato, sem duplicar.</p>`,
+    [["Cancelar","out"],["Lançar "+ms.length+" mensalidade(s)","",async()=>{const r=aplicarPlano(...window.__plano);await persistir();render();setTimeout(()=>alert(r.texto),100);}]]);
+}
 const resumoFicha=ms=>ms.map(m=>`<div class="soma"><span>${MESES[m.mes].slice(0,3)}/${m.ano}${m.dif>0?` <span class="muted">(inclui diferença de ${moeda(m.dif)})</span>`:""}</span><b>${moeda(m.total)}</b></div>`).join("");
 function perguntarFicha(ms){
   if(!ms.length){alert("Não encontrei a linha de Auxílio-Saúde nesta ficha.");return;}
@@ -1582,7 +1635,7 @@ async function lerEditorIa(i,novo){
   try{b=await obterArquivo(editando.nuvem[i]);}catch(e){alert(e.message);return;}
   if(!b){alert("Arquivo não encontrado.");return;}
   setStatus("🤖 Lendo com IA…");
-  try{const j=await iaLer(b,nomeArquivo(editando.nuvem[i]));if(/ficha/i.test(j.tipo_documento||"")&&Array.isArray(j.auxilio_saude)){setStatus("");document.getElementById("dlg").close();perguntarFicha(mesesFicha(j));return;}
+  try{const j=await iaLer(b,nomeArquivo(editando.nuvem[i]));if(ehPlanoJ(j)){setStatus("");document.getElementById("dlg").close();perguntarPlano(j);return;}if(/ficha/i.test(j.tipo_documento||"")&&Array.isArray(j.auxilio_saude)){setStatus("");document.getElementById("dlg").close();perguntarFicha(mesesFicha(j));return;}
     aplicarIA(j,editando);const p=pessoaPorCpf(editando.cpf);if(p)editando.pessoaId=p.id;editando.comprovado=true;desenharEditor(novo);setStatus("🤖 Lido. Confira e salve.");}
   catch(e){alert(e.message);setStatus("");}
 }
@@ -1607,11 +1660,12 @@ async function adicionarArquivos(arqs){
   let ativos=0;const espera=[];
   const limitar=fn=>new Promise((ok,err)=>{const go=()=>{ativos++;fn().then(ok,err).finally(()=>{ativos--;const n=espera.shift();if(n)n();});};ativos<4?go():espera.push(go);});
   const ps=arqs.map((f,k)=>limitar(()=>lerUma(f,k)));
-  let lidas=0,rep=0,lig=0,fichas=0;
+  let lidas=0,rep=0,lig=0,fichas=0,planos=0;
   for(let k=0;k<ps.length;k++){
     setStatus((ia?"🤖 Lendo":"📎 Guardando")+" nota "+(k+1)+" de "+ps.length+"…");
     let res;try{res=await ps[k];}catch(e){alert("Não consegui abrir um arquivo: "+e.message);continue;}
     const {l,como}=res;
+    if(l._plano){await DB.del("arq",l.nuvem[0]);if(um){perguntarPlano(l._plano);return;}const r=aplicarPlano(l._plano,mensalidadesPlano(l._plano));planos+=r.novos+r.corr;continue;}
     if(l._ficha){await DB.del("arq",l.nuvem[0]);if(um){perguntarFicha(mesesFicha(l._ficha));return;}fichas+=aplicarFicha(mesesFicha(l._ficha));continue;}
     if(!l.data)l.data=anoMes(ui.ano,ui.mes)+"-01";
     l.comprovado=true;
@@ -1626,7 +1680,7 @@ async function adicionarArquivos(arqs){
     if(lidas%5===0)render();
   }
   await persistir();render();
-  setStatus(lidas+" nota(s) lançada(s)"+(fichas?", "+fichas+" mês(es) de auxílio pela ficha financeira":"")+(lig?", "+lig+" ligada(s) a gastos sem comprovante":"")+(rep?", "+rep+" repetida(s) ignorada(s)":"")+". Confira as marcadas com \"Conferir\".");
+  setStatus(lidas+" nota(s) lançada(s)"+(fichas?", "+fichas+" mês(es) de auxílio pela ficha financeira":"")+(planos?", "+planos+" mensalidade(s) do plano pelo extrato":"")+(lig?", "+lig+" ligada(s) a gastos sem comprovante":"")+(rep?", "+rep+" repetida(s) ignorada(s)":"")+". Confira as marcadas com \"Conferir\".");
 }
 async function importarJson(f){
   if(!f)return;
