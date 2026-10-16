@@ -164,7 +164,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 // configurações (neste aparelho)
 // ======================================================================
 /** Cliente OAuth "Aplicativo da Web" do Google Cloud (origem: o endereço onde o app está publicado). */
-const GOOGLE_CLIENT_ID_WEB="";
+const GOOGLE_CLIENT_ID_WEB="664312467751-76mv5gq8qc7equ9udc5msmfj2710dv6n.apps.googleusercontent.com";
 /** Registro do app na Microsoft (Entra), com a plataforma "Aplicativo de página única" apontando para o endereço do app. */
 const MS_CLIENT_ID_WEB="";
 /** Venda: pede código de licença depois de alguns dias de teste. */
@@ -173,7 +173,7 @@ const DIAS_TESTE=7;
 const CONTATO="";
 const CHAVE_PUBLICA="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEmztOMpZv0CVoXNEX5rD8ut/jphbl2kTJVyHYHShTOw7EvmAIwq4J5D44MTKVokwyuVUIn42I56D+StPFxI7qWA==";
 
-const CFG_PADRAO={pastaApp:"Auxilio Saude",chave:"",modelo:"gemini-flash-latest",rapido:true,rpm:14,googleClientId:"",autoSinc:true,nuvem:"google",msClientId:"",driveCompleto:false,pastaNotas:"",lerAuto:true,organizar:true};
+const CFG_PADRAO={pastaApp:"Auxilio Saude",chave:"",modelo:"gemini-flash-latest",rapido:true,rpm:14,googleClientId:"",autoSinc:true,nuvem:"google",msClientId:"",driveCompleto:true,pastaNotas:"",lerAuto:true,organizar:true};
 let cfg={...CFG_PADRAO};
 try{cfg={...CFG_PADRAO,...JSON.parse(localStorage.getItem("aux_cfg")||"{}")};}catch(e){}
 function salvarCfg(){try{localStorage.setItem("aux_cfg",JSON.stringify(cfg));}catch(e){}}
