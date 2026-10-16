@@ -41,6 +41,7 @@ h2{font-family:var(--serif);font-size:17px;margin:0 0 8px;color:var(--deep)}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;border-left:4px solid var(--teal)}
 .stat .r{font-size:12px;color:var(--soft)}.stat .v{font-family:var(--serif);font-size:18px;font-weight:700;color:var(--deep)}
 .disp{border-radius:14px;padding:14px 16px;color:#fff;margin-bottom:12px}
+.disp.clicavel{cursor:pointer}
 .disp .ey{font-size:11px;letter-spacing:1.3px;text-transform:uppercase;color:#CFE8E3;font-weight:700}
 .disp .v{font-family:var(--serif);font-size:30px;font-weight:700}
 .disp .p{font-weight:600;margin-top:6px;font-size:14px}
@@ -337,7 +338,7 @@ const separar=c=>{const i=c.lastIndexOf("/");return i<0?["",c]:[c.slice(0,i),c.s
 const API_D="https://www.googleapis.com/drive/v3",UP_D="https://www.googleapis.com/upload/drive/v3",PASTA_MIME="application/vnd.google-apps.folder";
 const GD={token:null,exp:0};
 try{const t=JSON.parse(lsGet("gd_tok","null"));if(t&&t.exp>Date.now()+60000){GD.token=t.token;GD.exp=t.exp;}}catch(e){}
-const clientIdGoogle=()=>(cfg.googleClientId||GOOGLE_CLIENT_ID_WEB||"").trim();
+const clientIdGoogle=()=>(GOOGLE_CLIENT_ID_WEB||cfg.googleClientId||"").trim();
 /** Acesso completo: lê qualquer pasta de notas do Drive (o Google mostra o aviso de app não verificado). */
 const escopoGoogle=()=>cfg.driveCompleto?"https://www.googleapis.com/auth/drive":"https://www.googleapis.com/auth/drive.file";
 let gisPromessa=null;
@@ -347,7 +348,9 @@ function carregarGis(){
     s.onload=()=>ok();s.onerror=()=>{gisPromessa=null;err(new Error("Sem conexão com o Google."));};document.head.appendChild(s);});
   return gisPromessa;
 }
+const ENDERECO_APP="https://auxilio-saude.github.io/Auxilio-Saude/app/";
 async function gEntrar(){
+  if(location.protocol==="file:")throw new Error("O login do Google não funciona com o arquivo aberto direto do computador. Abra o app pelo endereço:\n"+ENDERECO_APP);
   if(!clientIdGoogle())throw new Error("O login do Google ainda não foi configurado neste app (Ajustes).");
   await carregarGis();
   return new Promise((ok,err)=>{
@@ -453,7 +456,7 @@ const GOOGLE={
 // ---------------------------------------------------------------- OneDrive (login Microsoft com PKCE, sem servidor)
 const GRAPH="https://graph.microsoft.com/v1.0",MS_AUTH="https://login.microsoftonline.com/common/oauth2/v2.0";
 const MS_ESCOPO="offline_access Files.ReadWrite User.Read";
-const clientIdMs=()=>(cfg.msClientId||MS_CLIENT_ID_WEB||"").trim();
+const clientIdMs=()=>(MS_CLIENT_ID_WEB||cfg.msClientId||"").trim();
 const redirMs=()=>location.origin+location.pathname.replace(/index\.html$/,"");
 const MS={token:null,exp:0};
 try{const t=JSON.parse(lsGet("ms_tok","null"));if(t&&t.exp>Date.now()+60000){MS.token=t.token;MS.exp=t.exp;}}catch(e){}
@@ -1349,7 +1352,7 @@ function renderMes(){
   let h=banners();
   if(ui.soConferir)return h+`<div class="card"><h2>Notas para conferir</h2>${tabela(ordenados().filter(l=>l.conferir),"Nada para conferir.")}
     <button class="btn out bloco" style="margin-top:10px" onclick="conferirTodas()">Marcar todas como conferidas</button></div>`;
-  h+=cardDisponivel().replace('<div class="disp"','<div class="disp" onclick="verComposicao()" style="cursor:pointer"').replace(/<\/div>$/,'<div style="color:#CFE8E3;font-size:12px;font-weight:700;margin-top:6px">Toque para ver mês a mês de onde vem esse total ›</div></div>');
+  h+=cardDisponivel().replace('<div class="disp"','<div class="disp clicavel" onclick="verComposicao()"').replace(/<\/div>$/,'<div style="color:#CFE8E3;font-size:12px;font-weight:700;margin-top:6px">Toque para ver mês a mês de onde vem esse total ›</div></div>');
   h+=`<div class="acoes"><button class="btn" onclick="document.getElementById('inpFoto').click()">📷 Foto da nota</button>
     <button class="btn navy" onclick="document.getElementById('inpArqs').click()">📄 Arquivos / várias</button>
     <button class="btn out" style="grid-column:1/-1" onclick="editar(null)">✍️ Lançar à mão</button></div>`;
